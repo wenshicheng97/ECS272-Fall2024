@@ -4,22 +4,21 @@ import { useFilterContext } from '../stores/FilterContext';
 import { loadCarData } from '../stores/dataLoader';
 
 interface LineChartProps {
-  dataFilePath: string; // Path to the CSV file, e.g., "/data/car_prices.csv"
+  dataFilePath: string;
 }
 
 const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
-  const { selectedMake, selectedBodyType } = useFilterContext();
+  const { selectedMake, selectedBodyType, selectedState } = useFilterContext();
   const [monthlyData, setMonthlyData] = useState<{ month: string; avgPrice: number; salesCount: number; stdDev: number }[]>([]);
 
   useEffect(() => {
-    // Load and process data based on selected filters
     loadCarData(dataFilePath).then((data) => {
       const filteredData = data.filter((row) =>
         (selectedMake === 'ALL' || row.make === selectedMake) &&
-        (selectedBodyType === 'ALL' || row.body === selectedBodyType)
+        (selectedBodyType === 'ALL' || row.body === selectedBodyType) &&
+        (selectedState === 'ALL' || row.state === selectedState)
       );
 
-      // Group data by month and calculate statistics
       const monthlyStats = d3.rollups(
         filteredData,
         (v) => {
@@ -28,26 +27,23 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
           const stdDev = d3.deviation(v, (d) => d.sellingprice) ?? 0;
           return { avgPrice, salesCount, stdDev };
         },
-        (d) => d.saledate.slice(0, 7) // Group by year-month (YYYY-MM)
+        (d) => d.saledate.slice(0, 7)
       );
 
-      // Convert to array and sort by date
       const sortedData = monthlyStats
         .map(([month, { avgPrice, salesCount, stdDev }]) => ({ month, avgPrice, salesCount, stdDev }))
         .sort((a, b) => a.month.localeCompare(b.month));
 
-      // Fill in missing months with zero values
       const filledData = fillMissingMonths(sortedData);
 
       setMonthlyData(filledData);
     });
-  }, [dataFilePath, selectedMake, selectedBodyType]);
+  }, [dataFilePath, selectedMake, selectedBodyType, selectedState]);
 
-  // Helper function to fill missing months with zero values
   const fillMissingMonths = (data: { month: string; avgPrice: number; salesCount: number; stdDev: number }[]) => {
     if (data.length === 0) return [];
 
-    const startDate = d3.timeMonth.floor(new Date(data[0].month + '-01'));
+    const startDate = d3.timeMonth.floor(new Date(data[0].month + '-02'));
     const endDate = d3.timeMonth.floor(new Date(data[data.length - 1].month + '-01'));
     const allMonths = d3.timeMonths(startDate, d3.timeMonth.offset(endDate, 1)).map(d3.timeFormat('%Y-%m'));
 
@@ -62,16 +58,13 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
   };
 
   useEffect(() => {
-    // Set up SVG dimensions
-    const width = 600;
-    const height = 300;
-    const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+    const width = 500;
+    const height = 400;
+    const margin = { top: 40, right: 30, bottom: 70, left: 70 };
 
-    // Select the SVG element and clear previous content
     const svg = d3.select('#line-chart').attr('width', width).attr('height', height);
     svg.selectAll('*').remove();
 
-    // Set up scales
     const x = d3.scaleBand()
       .domain(monthlyData.map((d) => d.month))
       .range([margin.left, width - margin.right]);
@@ -81,7 +74,6 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
       .nice()
       .range([height - margin.bottom, margin.top]);
 
-    // Create x-axis
     svg.append('g')
       .attr('class', 'x-axis')
       .attr('transform', `translate(0,${height - margin.bottom})`)
@@ -90,13 +82,11 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
       .attr('transform', 'rotate(-45)')
       .style('text-anchor', 'end');
 
-    // Create y-axis
     svg.append('g')
       .attr('class', 'y-axis')
       .attr('transform', `translate(${margin.left},0)`)
       .call(d3.axisLeft(y).ticks(6));
 
-    // Add x-axis label
     svg.append('text')
       .attr('class', 'x-label')
       .attr('text-anchor', 'middle')
@@ -104,7 +94,6 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
       .attr('y', height - 10)
       .text('Month');
 
-    // Add y-axis label
     svg.append('text')
       .attr('class', 'y-label')
       .attr('text-anchor', 'middle')
@@ -113,21 +102,37 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
       .attr('y', 20)
       .text('Average Sale Price');
 
-    // Add title
+
+    let title = 'Monthly Average Sale Price Trend';
+    if (selectedMake === 'ALL' && selectedBodyType === 'ALL'){
+      title = 'Monthly Average Sale Price Trend of All Cars';
+    }
+    if (selectedMake === 'ALL' && selectedBodyType !== 'ALL') {
+      title = `Monthly Average Sale Price Trend of All ${selectedBodyType}`;
+    }
+    else if (selectedMake !== 'ALL' && selectedBodyType === 'ALL') {
+      title = `Monthly Average Sale Price Trend of ${selectedMake} Cars`;
+    }
+    else if (selectedMake !== 'ALL' && selectedBodyType !== 'ALL') {
+      title = `Monthly Average Sale Price Trend of ${selectedMake} ${selectedBodyType}`;
+    }
+    if (selectedState !== 'ALL') title += ` in ${selectedState}`;
+
+    console.log(title.length)
+
     svg.append('text')
       .attr('class', 'chart-title')
       .attr('text-anchor', 'middle')
       .attr('x', width / 2)
       .attr('y', margin.top / 2)
-      .style('font-size', '16px')
-      .text('Monthly Average Sale Price Trend');
+      .style('font-size', title.length > 40 ?'12px': '16px')
+      .style('font-weight', 'bold')
+      .text(title);
 
-    // Define line generator
     const line = d3.line<{ month: string; avgPrice: number }>()
       .x((d) => x(d.month)! + x.bandwidth() / 2)
       .y((d) => y(d.avgPrice));
 
-    // Add line path with animation
     svg.append('path')
       .datum(monthlyData)
       .attr('class', 'line')
@@ -146,7 +151,6 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
       .duration(1000)
       .attr('stroke-dashoffset', 0);
 
-    // Tooltip
     const tooltip = d3.select('#tooltip');
     if (tooltip.empty()) {
       d3.select('body').append('div')
@@ -160,7 +164,6 @@ const LineChart: React.FC<LineChartProps> = ({ dataFilePath }) => {
         .style('opacity', 0);
     }
 
-    // Circles for each data point with tooltip event listeners
     svg.selectAll('.circle')
       .data(monthlyData)
       .enter()

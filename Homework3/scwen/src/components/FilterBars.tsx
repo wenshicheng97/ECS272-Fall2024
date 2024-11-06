@@ -4,29 +4,30 @@ import { useFilterContext } from '../stores/FilterContext';
 import { loadCarData } from '../stores/dataLoader';
 
 interface FilterBarsProps {
-  dataFilePath: string; // Path to the CSV file, e.g., "/data/car_prices.csv"
+  dataFilePath: string;
 }
 
 const FilterBars: React.FC<FilterBarsProps> = ({ dataFilePath }) => {
-  const { selectedMake, setSelectedMake, selectedBodyType, setSelectedBodyType } = useFilterContext();
+  const { selectedMake, setSelectedMake, selectedBodyType, setSelectedBodyType, selectedState, setSelectedState } = useFilterContext();
   const [allMakes, setAllMakes] = useState<string[]>(['ALL']);
   const [filteredBodyTypes, setFilteredBodyTypes] = useState<string[]>(['ALL']);
   const [allBodyTypes, setAllBodyTypes] = useState<string[]>(['ALL']);
+  const [allStates, setAllStates] = useState<string[]>(['ALL']);
 
   useEffect(() => {
-    // Load data once and initialize all options for make and body type
     loadCarData(dataFilePath).then((data) => {
       const uniqueMakes = Array.from(new Set(data.map((row) => row.make))).sort();
       const uniqueBodyTypes = Array.from(new Set(data.map((row) => row.body))).sort();
+      const uniqueStates = Array.from(new Set(data.map((row) => row.state))).sort();
 
       setAllMakes(['ALL', ...uniqueMakes]);
       setAllBodyTypes(['ALL', ...uniqueBodyTypes]);
-      setFilteredBodyTypes(['ALL', ...uniqueBodyTypes]); // Start with all body types
+      setFilteredBodyTypes(['ALL', ...uniqueBodyTypes]);
+      setAllStates(['ALL', ...uniqueStates]);
     });
   }, [dataFilePath]);
 
   useEffect(() => {
-    // Filter body type options based on the selected make
     loadCarData(dataFilePath).then((data) => {
       if (selectedMake === 'ALL') {
         setFilteredBodyTypes(allBodyTypes);
@@ -63,6 +64,19 @@ const FilterBars: React.FC<FilterBarsProps> = ({ dataFilePath }) => {
         >
           {filteredBodyTypes.map((bodyType) => (
             <MenuItem key={bodyType} value={bodyType}>{bodyType}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      <FormControl variant="outlined" style={{ minWidth: 120 }}>
+        <InputLabel>State</InputLabel>
+        <Select
+          value={selectedState}
+          onChange={(e) => setSelectedState(e.target.value)}
+          label="State"
+        >
+          {allStates.map((state) => (
+            <MenuItem key={state} value={state}>{state}</MenuItem>
           ))}
         </Select>
       </FormControl>
